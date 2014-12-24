@@ -1,0 +1,3 @@
+Usage: cleis2rdf [FILE]...
+
+Convert c-lei.org XML FILE (or stdin if omitted) to turtle.
