@@ -19,7 +19,7 @@ SUFFIXES =
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
 
-noinst_PROGRAMS += cleis2rdf
+bin_PROGRAMS += cleis2rdf
 cleis2rdf_SOURCES = cleis2rdf.c cleis2rdf.yuck
 cleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
 cleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
