@@ -431,7 +431,7 @@ _parse(const char *file)
 	static struct lei_s r[1U];
 	int rc;
 
-	rc = xmlSAXUserParseFile(&hdl, r, file);
+	rc = xmlSAXUserParseFile(&hdl, r, file ?: "-");
 
 	/* free resources */
 	if (LIKELY(sbuf != NULL)) {
@@ -450,10 +450,41 @@ _parse(const char *file)
 }
 
 
+#include "cleis2rdf.yucc"
+
 int
 main(int argc, char *argv[])
 {
-	return !!_parse(argv[1U]);
+	yuck_t argi[1U];
+	size_t i;
+	int rc;
+
+	if (yuck_parse(argi, argc, argv) < 0) {
+		rc = 1;
+		goto out;
+	}
+
+	/* assume success */
+	rc = 0;
+
+	/* check if no files have been supplied */
+	i = 0U;
+	if (!argi->nargs) {
+		/* read stdin */
+		goto one_off;
+	}
+	for (; i < argi->nargs; i++) {
+	one_off:
+		if (_parse(argi->args[i]) != 0) {
+			fprintf(stderr, "\
+cleis2rdf: Error: cannot convert `%s'\n", argi->args[i]);
+			rc++;
+		}
+	}
+
+out:
+	yuck_free(argi);
+	return rc;
 }
 
 /* cleis2rdf.c ends here */

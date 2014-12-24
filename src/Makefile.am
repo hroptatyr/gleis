@@ -20,10 +20,12 @@ CLEANFILES += version.c
 EXTRA_DIST += version.c.in
 
 noinst_PROGRAMS += cleis2rdf
+cleis2rdf_SOURCES = cleis2rdf.c cleis2rdf.yuck
 cleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
 cleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
 cleis2rdf_LDFLAGS = $(AM_LDFLAGS)
 cleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+BUILT_SOURCES += cleis2rdf.yucc
 
 
 ## version rules
