@@ -101,23 +101,33 @@ static char *obuf;
 static size_t obix;
 static size_t obsz;
 
-static void
-sax_buf_push(const char *txt, size_t len)
+static int
+sax_buf_resz(size_t len)
 {
 	if (UNLIKELY(sbix + len >= sbsz)) {
-		size_t new_sz = sbix + len;
+		size_t new_sz = sbix + len + 1U;
 
 		/* round to multiple of 4096 */
 		sbsz = (new_sz & ~0xfff) + 4096L;
 		/* realloc now */
 		if (UNLIKELY((sbuf = realloc(sbuf, sbsz)) == NULL)) {
-			return;
+			return -1;
 		}
+	}
+	return 0;
+}
+
+static ssize_t
+sax_buf_push(const char *txt, size_t len)
+{
+	/* resize? */
+	if (UNLIKELY(sax_buf_resz(len) < 0)) {
+		return -1;
 	}
 	/* now copy */
 	memcpy(sbuf + sbix, txt, len);
 	sbuf[sbix += len] = '\0';
-	return;
+	return len;
 }
 
 static void
@@ -128,9 +138,16 @@ sax_buf_reset(void)
 }
 
 static int
-out_buf_flush(void)
+out_buf_flsh(size_t len)
 {
-	if (UNLIKELY(!obix)) {
+#define FORCE_FLUSH	((size_t)-1)
+	if (UNLIKELY(len == FORCE_FLUSH)) {
+		/* definitely flush */
+		;
+	} else if (LIKELY(obix + len <= obsz)) {
+		/* no flush */
+		return 0;
+	} else if (UNLIKELY(!obix)) {
 		return 0;
 	}
 	for (ssize_t nwr, tot = 0U; (size_t)tot < obix; tot += nwr) {
@@ -139,19 +156,13 @@ out_buf_flush(void)
 			return -1;
 		}
 	}
+	obix = 0U;
 	return 0;
 }
 
 static int
-out_buf_push(const char *str, size_t len)
+out_buf_resz(size_t len)
 {
-	if (obix + len > obsz) {
-		/* flush */
-		if (UNLIKELY(out_buf_flush() < 0)) {
-			return -1;
-		}
-		obix = 0U;	
-	}
 	if (UNLIKELY(len > obsz)) {
 		/* resize */
 		size_t new_sz = len;
@@ -163,9 +174,121 @@ out_buf_push(const char *str, size_t len)
 			return -1;
 		}
 	}
+	return 0;
+}
+
+static int
+out_buf_push(const char *str, size_t len)
+{
+	/* flush? */
+	if (UNLIKELY(out_buf_flsh(len) < 0)) {
+		return -1;
+	}
+	/* resize? */
+	if (UNLIKELY(out_buf_resz(len) < 0)) {
+		return -1;
+	}
 	/* now copy */
 	memcpy(obuf + obix, str, len);
 	obuf[obix += len] = '\0';
+	return 0;
+}
+
+static int
+out_buf_push_esc(const char *str, size_t len)
+{
+/* like out_buf_push() but account for the necessity that we have
+ * to escape every character */
+	size_t clen = 0U;
+
+	/* flush? */
+	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
+		return -1;
+	}
+	/* resize? */
+	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
+		return -1;
+	}
+	/* now esc-copy */
+	for (size_t i = 0U; i < len; i++) {
+		switch (str[i]) {
+		default:
+			obuf[obix + clen++] = str[i];
+			break;
+		case '"':
+		case '\n':
+		case '\\':
+			obuf[obix + clen++] = '\\';
+			obuf[obix + clen++] = str[i];
+			break;
+		}
+	}
+	obuf[obix += clen] = '\0';
+	return 0;
+}
+
+static int
+out_buf_push_esc_nws(const char *str, size_t len)
+{
+/* like out_buf_push_esc() but also normalise whitespace */
+	size_t i = 0U;
+	size_t clen = 0U;
+
+	/* flush? */
+	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
+		return -1;
+	}
+	/* resize? */
+	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
+		return -1;
+	}
+	/* skip leading ws */
+	for (i = 0U; i < len; i++) {
+		switch (str[i]) {
+		case ' ':
+		case '\t':
+		case '\n':
+		case '\f':
+			continue;
+		default:
+			break;
+		}
+		break;
+	}
+	/* now esc-copy */
+	for (; i < len; i++) {
+		switch (str[i]) {
+		default:
+			obuf[obix + clen++] = str[i];
+			break;
+		case ' ':
+		case '\t':
+		case '\n':
+		case '\f':
+			obuf[obix + clen++] = ' ';
+			break;
+		case '"':
+		case '\\':
+			obuf[obix + clen++] = '\\';
+			obuf[obix + clen++] = str[i];
+			break;
+		}
+	}
+	/* kill trailing ws */
+	for (; i > 0; i--) {
+		switch (str[i - 1]) {
+		case ' ':
+		case '\t':
+		case '\n':
+		case '\f':
+			continue;
+		default:
+			break;
+		}
+		break;
+	}
+	/* perfect */
+	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -261,7 +384,7 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(" ", 1U);
 			out_buf_push(ltag, sizeof(ltag) - 1U);
 			out_buf_push(" \"", 2U);
-			out_buf_push(sbuf + r->name, r->nlen);
+			out_buf_push_esc_nws(sbuf + r->name, r->nlen);
 			out_buf_push("\" ", 2U);
 
 			if (r->flen) {
@@ -271,7 +394,7 @@ sax_eo(void *ctx, const xmlChar *name)
 				out_buf_push(";\n   ", 5U);
 				out_buf_push(tag, sizeof(tag) - 1U);
 				out_buf_push(" \"", 2U);
-				out_buf_push(sbuf + r->form, r->flen);
+				out_buf_push_esc(sbuf + r->form, r->flen);
 				out_buf_push("\" ", 2U);
 			}
 			if (r->jlen) {
@@ -280,7 +403,7 @@ sax_eo(void *ctx, const xmlChar *name)
 				out_buf_push(";\n   ", 5U);
 				out_buf_push(tag, sizeof(tag) - 1U);
 				out_buf_push(" \"", 2U);
-				out_buf_push(sbuf + r->jrsd, r->jlen);
+				out_buf_push_esc(sbuf + r->jrsd, r->jlen);
 				out_buf_push("\" ", 2U);
 			}
 			out_buf_push(".\n", 2U);
@@ -289,7 +412,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		sax_buf_reset();
 	} else if (!strcmp(rname, "LEIRecords")) {
 		/* flush buffer */
-		out_buf_flush();
+		out_buf_flsh(FORCE_FLUSH);
 	}
 	return;
 }
