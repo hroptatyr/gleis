@@ -1,0 +1,3 @@
+Usage: pleis2rdf [FILE]...
+
+Convert pre-lei XML FILE (or stdin if omitted) to turtle.
