@@ -27,6 +27,14 @@ cleis2rdf_LDFLAGS = $(AM_LDFLAGS)
 cleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
 BUILT_SOURCES += cleis2rdf.yucc
 
+bin_PROGRAMS += pleis2rdf
+pleis2rdf_SOURCES = pleis2rdf.c pleis2rdf.yuck
+pleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
+pleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
+pleis2rdf_LDFLAGS = $(AM_LDFLAGS)
+pleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+BUILT_SOURCES += pleis2rdf.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
