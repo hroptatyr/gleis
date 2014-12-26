@@ -124,10 +124,48 @@ sax_buf_push(const char *txt, size_t len)
 	if (UNLIKELY(sax_buf_resz(len) < 0)) {
 		return -1;
 	}
-	/* now copy */
+	/* copy the rest */
 	memcpy(sbuf + sbix, txt, len);
 	sbuf[sbix += len] = '\0';
 	return len;
+}
+
+static size_t
+sax_buf_massage(size_t from)
+{
+	size_t i;
+	size_t o;
+	const char *tp;
+
+	if (LIKELY((tp = strchr(sbuf + from, '&')) == NULL)) {
+		/* nothing to do */
+		return sbix;
+	}
+	/* otherwise head-start on the copy-and-decode loop */
+	for (i = o = tp - sbuf; i < sbix; i++, o++) {
+		if ((sbuf[o] = sbuf[i]) == '&') {
+			if (0) {
+				;
+			} else if (!memcmp(sbuf + i, "&amp;", 5U)) {
+				sbuf[o] = '&';
+				i += 4U;
+			} else if (!memcmp(sbuf + i, "&lt;", 4U)) {
+				sbuf[o] = '<';
+				i += 3U;
+			} else if (!memcmp(sbuf + i, "&gt;", 4U)) {
+				sbuf[o] = '>';
+				i += 3U;
+			} else if (!memcmp(sbuf + i, "&quot;", 6U)) {
+				sbuf[o] = '"';
+				i += 5U;
+			} else if (!memcmp(sbuf + i, "&apos;", 6U)) {
+				sbuf[o] = '\'';
+				i += 5U;
+			}
+		}
+	}
+	sbuf[sbix = o] = '\0';
+	return sbix;
 }
 
 static void
@@ -352,16 +390,16 @@ sax_eo(void *ctx, const xmlChar *name)
 	if (0) {
 		;
 	} else if (!strcmp(rname, "RegisteredName")) {
-		r->nlen = sbix - r->name;
+		r->nlen = sax_buf_massage(r->name) - r->name;
 		pushp = false;
 	} else if (!strcmp(rname, "EntityLegalForm")) {
-		r->flen = sbix - r->form;
+		r->flen = sax_buf_massage(r->form) - r->form;
 		pushp = false;
 	} else if (!strcmp(rname, "RegisteredCountryCode")) {
-		r->jlen = sbix - r->jrsd;
+		r->jlen = sax_buf_massage(r->jrsd) - r->jrsd;
 		pushp = false;
 	} else if (!strcmp(rname, "LegalEntityIdentifier")) {
-		r->llen = sbix - r->lei;
+		r->llen = sax_buf_massage(r->lei) - r->lei;
 		pushp = false;
 	} else if (!strcmp(rname, "LEIRegistration")) {
 		if (r->llen && r->nlen) {
