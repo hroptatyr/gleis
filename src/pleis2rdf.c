@@ -402,39 +402,42 @@ sax_eo(void *ctx, const xmlChar *name)
 		r->llen = sax_buf_massage(r->lei) - r->lei;
 		pushp = false;
 	} else if (!strcmp(rname, "LEIRegistration")) {
-		if (r->llen && r->nlen) {
-			static const char ltag[] = "lei:LegalName";
-			
-			out_buf_push("ol:", 3U);
-			out_buf_push(sbuf + r->lei, r->llen);
+		/* principal type info */
+		out_buf_push("ol:", 3U);
+		out_buf_push(sbuf + r->lei, r->llen);
+		out_buf_push(" a lei:LEI ", 11U);
 
-			out_buf_push(" ", 1U);
-			out_buf_push(ltag, sizeof(ltag) - 1U);
+		if (r->llen && r->nlen) {
+			static const char tag[] = "lei:LegalName";
+			
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, sizeof(tag) - 1U);
 			out_buf_push(" \"", 2U);
 			out_buf_push_esc_nws(sbuf + r->name, r->nlen);
 			out_buf_push("\" ", 2U);
-
-			if (r->flen) {
-				/* append legal form */
-				static const char tag[] = "lei:LegalForm";
-
-				out_buf_push(";\n   ", 5U);
-				out_buf_push(tag, sizeof(tag) - 1U);
-				out_buf_push(" \"", 2U);
-				out_buf_push_esc(sbuf + r->form, r->flen);
-				out_buf_push("\" ", 2U);
-			}
-			if (r->jlen) {
-				/* append legal form */
-				static const char tag[] = "lei:LegalJurisdiction";
-				out_buf_push(";\n   ", 5U);
-				out_buf_push(tag, sizeof(tag) - 1U);
-				out_buf_push(" \"", 2U);
-				out_buf_push_esc(sbuf + r->jrsd, r->jlen);
-				out_buf_push("\" ", 2U);
-			}
-			out_buf_push(".\n", 2U);
 		}
+		if (r->flen) {
+			/* append legal form */
+			static const char tag[] = "lei:LegalForm";
+
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(" \"", 2U);
+			out_buf_push_esc(sbuf + r->form, r->flen);
+			out_buf_push("\" ", 2U);
+		}
+		if (r->jlen) {
+			/* append legal form */
+			static const char tag[] = "lei:LegalJurisdiction";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(" \"", 2U);
+			out_buf_push_esc(sbuf + r->jrsd, r->jlen);
+			out_buf_push("\" ", 2U);
+		}
+
+		out_buf_push(".\n", 2U);
+
 		memset(r, 0, sizeof(*r));
 		sax_buf_reset();
 	} else if (!strcmp(rname, "LEIRegistrations")) {
