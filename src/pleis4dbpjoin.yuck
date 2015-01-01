@@ -1,0 +1,4 @@
+Usage: pleis4dbjoin [FILE]...
+
+Rephrase pre-lei XML FILE (or stdin if omitted) for join
+with dbpedia data.

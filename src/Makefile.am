@@ -35,6 +35,22 @@ pleis2rdf_LDFLAGS = $(AM_LDFLAGS)
 pleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
 BUILT_SOURCES += pleis2rdf.yucc
 
+bin_PROGRAMS += cleis4dbpjoin
+cleis4dbpjoin_SOURCES = cleis4dbpjoin.c cleis4dbpjoin.yuck
+cleis4dbpjoin_CPPFLAGS = $(AM_CPPFLAGS)
+cleis4dbpjoin_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
+cleis4dbpjoin_LDFLAGS = $(AM_LDFLAGS)
+cleis4dbpjoin_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+BUILT_SOURCES += cleis4dbpjoin.yucc
+
+bin_PROGRAMS += pleis4dbpjoin
+pleis4dbpjoin_SOURCES = pleis4dbpjoin.c pleis4dbpjoin.yuck
+pleis4dbpjoin_CPPFLAGS = $(AM_CPPFLAGS)
+pleis4dbpjoin_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
+pleis4dbpjoin_LDFLAGS = $(AM_LDFLAGS)
+pleis4dbpjoin_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+BUILT_SOURCES += pleis4dbpjoin.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version

@@ -1,0 +1,4 @@
+Usage: cleis4dbpjoin [FILE]...
+
+Rephrase c-lei.org XML FILE (or stdin if omitted) for join
+with dbpedia data.
