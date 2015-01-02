@@ -67,6 +67,8 @@ struct lei_s {
 	size_t llen;
 	size_t name;
 	size_t nlen;
+	size_t webs;
+	size_t wlen;
 };
 
 
@@ -352,6 +354,9 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		} else if (!strcmp(rname, "RegisteredName")) {
 			r->name = sbix;
 			pushp = true;
+		} else if (!strcmp(rname, "EntityWebsiteAddress")) {
+			r->webs = sbix;
+			pushp = true;
 		}
 		break;
 
@@ -402,6 +407,9 @@ sax_eo(void *ctx, const xmlChar *name)
 		} else if (!strcmp(rname, "RegisteredName")) {
 			r->nlen = sax_buf_massage(r->name) - r->name;
 			pushp = false;
+		} else if (!strcmp(rname, "EntityWebsiteAddress")) {
+			r->wlen = sax_buf_massage(r->webs) - r->webs;
+			pushp = false;
 		} else if (!strcmp(rname, "LEIRegistration")) {
 			if (r->llen && r->nlen) {
 				goto print;
@@ -421,6 +429,10 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push(sbuf + r->lei, r->llen);
 		out_buf_push("\t", 1U);
 		out_buf_push_nws(sbuf + r->name, r->nlen);
+		if (r->wlen) {
+			out_buf_push("\t", 1U);
+			out_buf_push_nws(sbuf + r->webs, r->wlen);
+		}
 		out_buf_push("\n", 1U);
 
 	reset:
