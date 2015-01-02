@@ -19,21 +19,13 @@ SUFFIXES =
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
 
-bin_PROGRAMS += cleis2rdf
-cleis2rdf_SOURCES = cleis2rdf.c cleis2rdf.yuck
-cleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
-cleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
-cleis2rdf_LDFLAGS = $(AM_LDFLAGS)
-cleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
-BUILT_SOURCES += cleis2rdf.yucc
-
-bin_PROGRAMS += pleis2rdf
-pleis2rdf_SOURCES = pleis2rdf.c pleis2rdf.yuck
-pleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
-pleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
-pleis2rdf_LDFLAGS = $(AM_LDFLAGS)
-pleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
-BUILT_SOURCES += pleis2rdf.yucc
+bin_PROGRAMS += gleis2rdf
+gleis2rdf_SOURCES = gleis2rdf.c gleis2rdf.yuck
+gleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
+gleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
+gleis2rdf_LDFLAGS = $(AM_LDFLAGS)
+gleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+BUILT_SOURCES += gleis2rdf.yucc
 
 bin_PROGRAMS += cleis4dbpjoin
 cleis4dbpjoin_SOURCES = cleis4dbpjoin.c cleis4dbpjoin.yuck

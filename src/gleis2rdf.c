@@ -1,4 +1,4 @@
-/*** pleis2rdf.c -- c-lei file parser
+/*** gleis2rdf.c -- c-lei file parser
  *
  * Copyright (C) 2014-2015  Sebastian Freundt
  *
@@ -124,7 +124,7 @@ sax_buf_push(const char *txt, size_t len)
 	if (UNLIKELY(sax_buf_resz(len) < 0)) {
 		return -1;
 	}
-	/* copy the rest */
+	/* now copy */
 	memcpy(sbuf + sbix, txt, len);
 	sbuf[sbix += len] = '\0';
 	return len;
@@ -333,6 +333,12 @@ out_buf_push_esc_nws(const char *str, size_t len)
 
 /* our SAX parser */
 static bool pushp;
+static bool in_ent_p;
+static enum {
+	FL_UNK,
+	FL_CLEIS,
+	FL_PLEIS,
+} flavour;
 
 static xmlEntityPtr
 sax_get_ent(void *UNUSED(ctx), const xmlChar *name)
@@ -356,26 +362,63 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 	const char *rname = tag_massage((const char*)name);
 	struct lei_s *r = ctx;
 
-	if (0) {
-		;
-	} else if (!strcmp(rname, "RegisteredName")) {
-		r->name = sbix;
-		pushp = true;
-	} else if (!strcmp(rname, "EntityLegalForm")) {
-		r->form = sbix;
-		pushp = true;
-	} else if (!strcmp(rname, "RegisteredCountryCode")) {
-		r->jrsd = sbix;
-		pushp = true;
-	} else if (!strcmp(rname, "LegalEntityIdentifier")) {
-		r->lei = sbix;
-		pushp = true;
-	} else if (!strcmp(rname, "LEIRegistrations")) {
+	switch (flavour) {
 		static const char pre[] = "\
 @prefix ol: <http://openleis.com/legal_entities/> .\n\
 @prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
 \n";
+
+	case FL_UNK:
+		if (!strcmp(rname, "LEIRecords")) {
+			flavour = FL_CLEIS;
+		} else if (!strcmp(rname, "LEIRegistrations")) {
+			flavour = FL_PLEIS;
+		} else {
+			break;
+		}
 		out_buf_push(pre, sizeof(pre) - 1U);
+		break;
+
+	case FL_CLEIS:
+		if (in_ent_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "LegalName")) {
+				r->name = sbix;
+				pushp = true;
+			} else if (!strcmp(rname, "LegalForm")) {
+				r->form = sbix;
+				pushp = true;
+			} else if (!strcmp(rname, "LegalJurisdiction")) {
+				r->jrsd = sbix;
+				pushp = true;
+			}
+		} else if (!strcmp(rname, "Entity")) {
+			in_ent_p = true;
+		} else if (!strcmp(rname, "LEI")) {
+			r->lei = sbix;
+			pushp = true;
+		}
+		break;
+
+	case FL_PLEIS:
+		if (!strcmp(rname, "LegalEntityIdentifier")) {
+			r->lei = sbix;
+			pushp = true;
+		} else if (!strcmp(rname, "RegisteredName")) {
+			r->name = sbix;
+			pushp = true;
+		} else if (!strcmp(rname, "EntityLegalForm")) {
+			r->form = sbix;
+			pushp = true;
+		} else if (!strcmp(rname, "RegisteredCountryCode")) {
+			r->jrsd = sbix;
+			pushp = true;
+		}
+		break;
+
+	default:
+		break;
 	}
 	return;
 }
@@ -387,27 +430,70 @@ sax_eo(void *ctx, const xmlChar *name)
 	const char *rname = tag_massage((const char*)name);
 	struct lei_s *r = ctx;
 
-	if (0) {
-		;
-	} else if (!strcmp(rname, "RegisteredName")) {
-		r->nlen = sax_buf_massage(r->name) - r->name;
-		pushp = false;
-	} else if (!strcmp(rname, "EntityLegalForm")) {
-		r->flen = sax_buf_massage(r->form) - r->form;
-		pushp = false;
-	} else if (!strcmp(rname, "RegisteredCountryCode")) {
-		r->jlen = sax_buf_massage(r->jrsd) - r->jrsd;
-		pushp = false;
-	} else if (!strcmp(rname, "LegalEntityIdentifier")) {
-		r->llen = sax_buf_massage(r->lei) - r->lei;
-		pushp = false;
-	} else if (!strcmp(rname, "LEIRegistration")) {
+	switch (flavour) {
+	case FL_UNK:
+		break;
+
+	case FL_CLEIS:
+		if (in_ent_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "LegalName")) {
+				r->nlen = sbix - r->name;
+			} else if (!strcmp(rname, "LegalForm")) {
+				r->flen = sbix - r->form;
+			} else if (!strcmp(rname, "LegalJurisdiction")) {
+				r->jlen = sbix - r->jrsd;
+			} else if (!strcmp(rname, "Entity")) {
+				in_ent_p = false;
+			}
+			pushp = false;
+		} else if (!strcmp(rname, "LEI")) {
+			r->llen = sbix - r->lei;
+			pushp = false;
+		} else if (!strcmp(rname, "LEIRecord")) {
+			if (r->llen) {
+				goto print;
+			}
+			goto reset;
+		} else if (!strcmp(rname, "LEIRecords")) {
+			goto final;
+		}
+		break;
+
+	case FL_PLEIS:
+		if (!strcmp(rname, "LegalEntityIdentifier")) {
+			r->llen = sax_buf_massage(r->lei) - r->lei;
+			pushp = false;
+		} else if (!strcmp(rname, "RegisteredName")) {
+			r->nlen = sax_buf_massage(r->name) - r->name;
+			pushp = false;
+		} else if (!strcmp(rname, "EntityLegalForm")) {
+			r->flen = sax_buf_massage(r->form) - r->form;
+			pushp = false;
+		} else if (!strcmp(rname, "RegisteredCountryCode")) {
+			r->jlen = sax_buf_massage(r->jrsd) - r->jrsd;
+			pushp = false;
+		} else if (!strcmp(rname, "LEIRegistration")) {
+			if (r->llen) {
+				goto print;
+			}
+			goto reset;
+		} else if (!strcmp(rname, "LEIRegistrations")) {
+			goto final;
+		}
+		break;
+
+	default:
+		break;
+
+	print:
 		/* principal type info */
 		out_buf_push("ol:", 3U);
 		out_buf_push(sbuf + r->lei, r->llen);
 		out_buf_push(" a lei:LEI ", 11U);
 
-		if (r->llen && r->nlen) {
+		if (r->nlen) {
 			static const char tag[] = "lei:LegalName";
 			
 			out_buf_push(";\n   ", 5U);
@@ -438,11 +524,18 @@ sax_eo(void *ctx, const xmlChar *name)
 
 		out_buf_push(".\n", 2U);
 
+	reset:
 		memset(r, 0, sizeof(*r));
 		sax_buf_reset();
-	} else if (!strcmp(rname, "LEIRegistrations")) {
+		break;
+
+	final:
 		/* flush buffer */
 		out_buf_flsh(FORCE_FLUSH);
+		flavour = FL_UNK;
+		in_ent_p = false;
+		pushp = false;
+		break;
 	}
 	return;
 }
@@ -480,7 +573,7 @@ _parse(const char *file)
 }
 
 
-#include "pleis2rdf.yucc"
+#include "gleis2rdf.yucc"
 
 int
 main(int argc, char *argv[])
@@ -507,7 +600,7 @@ main(int argc, char *argv[])
 	one_off:
 		if (_parse(argi->args[i]) != 0) {
 			fprintf(stderr, "\
-pleis2rdf: Error: cannot convert `%s'\n", argi->args[i]);
+gleis2rdf: Error: cannot convert `%s'\n", argi->args[i]);
 			rc++;
 		}
 	}
@@ -517,4 +610,4 @@ out:
 	return rc;
 }
 
-/* pleis2rdf.c ends here */
+/* gleis2rdf.c ends here */
