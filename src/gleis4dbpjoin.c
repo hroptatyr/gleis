@@ -1,4 +1,4 @@
-/*** pleis4dbpjoin.c -- c-lei file parser
+/*** gleis4dbpjoin.c -- c-lei file parser
  *
  * Copyright (C) 2014-2015  Sebastian Freundt
  *
@@ -120,7 +120,7 @@ sax_buf_push(const char *txt, size_t len)
 	if (UNLIKELY(sax_buf_resz(len) < 0)) {
 		return -1;
 	}
-	/* copy the rest */
+	/* now copy */
 	memcpy(sbuf + sbix, txt, len);
 	sbuf[sbix += len] = '\0';
 	return len;
@@ -256,7 +256,7 @@ out_buf_push_nws(const char *str, size_t len)
 		}
 		break;
 	}
-	/* now nsw-copy */
+	/* now esc-copy */
 	for (; i < len; i++) {
 		switch (str[i]) {
 		default:
@@ -291,6 +291,12 @@ out_buf_push_nws(const char *str, size_t len)
 
 /* our SAX parser */
 static bool pushp;
+static bool in_ent_p;
+static enum {
+	FL_UNK,
+	FL_CLEIS,
+	FL_PLEIS,
+} flavour;
 
 static xmlEntityPtr
 sax_get_ent(void *UNUSED(ctx), const xmlChar *name)
@@ -314,14 +320,43 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 	const char *rname = tag_massage((const char*)name);
 	struct lei_s *r = ctx;
 
-	if (0) {
-		;
-	} else if (!strcmp(rname, "RegisteredName")) {
-		r->name = sbix;
-		pushp = true;
-	} else if (!strcmp(rname, "LegalEntityIdentifier")) {
-		r->lei = sbix;
-		pushp = true;
+	switch (flavour) {
+	case FL_UNK:
+		if (!strcmp(rname, "LEIRecords")) {
+			flavour = FL_CLEIS;
+		} else if (!strcmp(rname, "LEIRegistrations")) {
+			flavour = FL_PLEIS;
+		} else {
+			break;
+		}
+		break;
+
+	case FL_CLEIS:
+		if (in_ent_p) {
+			if (!strcmp(rname, "LegalName")) {
+				r->name = sbix;
+				pushp = true;
+			}
+		} else if (!strcmp(rname, "Entity")) {
+			in_ent_p = true;
+		} else if (!strcmp(rname, "LEI")) {
+			r->lei = sbix;
+			pushp = true;
+		}
+		break;
+
+	case FL_PLEIS:
+		if (!strcmp(rname, "LegalEntityIdentifier")) {
+			r->lei = sbix;
+			pushp = true;
+		} else if (!strcmp(rname, "RegisteredName")) {
+			r->name = sbix;
+			pushp = true;
+		}
+		break;
+
+	default:
+		break;
 	}
 	return;
 }
@@ -333,15 +368,54 @@ sax_eo(void *ctx, const xmlChar *name)
 	const char *rname = tag_massage((const char*)name);
 	struct lei_s *r = ctx;
 
-	if (0) {
-		;
-	} else if (!strcmp(rname, "RegisteredName")) {
-		r->nlen = sax_buf_massage(r->name) - r->name;
-		pushp = false;
-	} else if (!strcmp(rname, "LegalEntityIdentifier")) {
-		r->llen = sax_buf_massage(r->lei) - r->lei;
-		pushp = false;
-	} else if (!strcmp(rname, "LEIRegistration") && r->nlen) {
+	switch (flavour) {
+	case FL_UNK:
+		break;
+
+	case FL_CLEIS:
+		if (in_ent_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "LegalName")) {
+				r->nlen = sbix - r->name;
+			} else if (!strcmp(rname, "Entity")) {
+				in_ent_p = false;
+			}
+			pushp = false;
+		} else if (!strcmp(rname, "LEI")) {
+			r->llen = sbix - r->lei;
+			pushp = false;
+		} else if (!strcmp(rname, "LEIRecord")) {
+			if (r->llen && r->nlen) {
+				goto print;
+			}
+			goto reset;
+		} else if (!strcmp(rname, "LEIRecords")) {
+			goto final;
+		}
+		break;
+
+	case FL_PLEIS:
+		if (!strcmp(rname, "LegalEntityIdentifier")) {
+			r->llen = sax_buf_massage(r->lei) - r->lei;
+			pushp = false;
+		} else if (!strcmp(rname, "RegisteredName")) {
+			r->nlen = sax_buf_massage(r->name) - r->name;
+			pushp = false;
+		} else if (!strcmp(rname, "LEIRegistration")) {
+			if (r->llen && r->nlen) {
+				goto print;
+			}
+			goto reset;
+		} else if (!strcmp(rname, "LEIRegistrations")) {
+			goto final;
+		}
+		break;
+
+	default:
+		break;
+
+	print:
 		/* principal type info */
 		out_buf_push("ol:", 3U);
 		out_buf_push(sbuf + r->lei, r->llen);
@@ -349,11 +423,18 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push_nws(sbuf + r->name, r->nlen);
 		out_buf_push("\n", 1U);
 
+	reset:
 		memset(r, 0, sizeof(*r));
 		sax_buf_reset();
-	} else if (!strcmp(rname, "LEIRegistrations")) {
+		break;
+
+	final:
 		/* flush buffer */
 		out_buf_flsh(FORCE_FLUSH);
+		flavour = FL_UNK;
+		in_ent_p = false;
+		pushp = false;
+		goto reset;
 	}
 	return;
 }
@@ -391,7 +472,7 @@ _parse(const char *file)
 }
 
 
-#include "pleis4dbpjoin.yucc"
+#include "gleis4dbpjoin.yucc"
 
 int
 main(int argc, char *argv[])
@@ -418,7 +499,7 @@ main(int argc, char *argv[])
 	one_off:
 		if (_parse(argi->args[i]) != 0) {
 			fprintf(stderr, "\
-pleis4dbpjoin: Error: cannot convert `%s'\n", argi->args[i]);
+gleis4dbpjoin: Error: cannot convert `%s'\n", argi->args[i]);
 			rc++;
 		}
 	}
@@ -428,4 +509,4 @@ out:
 	return rc;
 }
 
-/* pleis4dbpjoin.c ends here */
+/* gleis4dbpjoin.c ends here */

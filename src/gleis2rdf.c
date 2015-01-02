@@ -535,7 +535,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		flavour = FL_UNK;
 		in_ent_p = false;
 		pushp = false;
-		break;
+		goto reset;
 	}
 	return;
 }
