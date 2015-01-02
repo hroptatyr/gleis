@@ -215,11 +215,11 @@ static int
 out_buf_push(const char *str, size_t len)
 {
 	/* flush? */
-	if (UNLIKELY(out_buf_flsh(len) < 0)) {
+	if (UNLIKELY(out_buf_flsh(len + 1U) < 0)) {
 		return -1;
 	}
 	/* resize? */
-	if (UNLIKELY(out_buf_resz(len) < 0)) {
+	if (UNLIKELY(out_buf_resz(len + 1U) < 0)) {
 		return -1;
 	}
 	/* now copy */
@@ -229,51 +229,18 @@ out_buf_push(const char *str, size_t len)
 }
 
 static int
-out_buf_push_esc(const char *str, size_t len)
+out_buf_push_nws(const char *str, size_t len)
 {
-/* like out_buf_push() but account for the necessity that we have
- * to escape every character */
-	size_t clen = 0U;
-
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
-		return -1;
-	}
-	/* now esc-copy */
-	for (size_t i = 0U; i < len; i++) {
-		switch (str[i]) {
-		default:
-			obuf[obix + clen++] = str[i];
-			break;
-		case '"':
-		case '\n':
-		case '\\':
-			obuf[obix + clen++] = '\\';
-			obuf[obix + clen++] = str[i];
-			break;
-		}
-	}
-	obuf[obix += clen] = '\0';
-	return 0;
-}
-
-static int
-out_buf_push_esc_nws(const char *str, size_t len)
-{
-/* like out_buf_push_esc() but also normalise whitespace */
+/* like out_buf_push() but also normalise whitespace */
 	size_t i = 0U;
 	size_t clen = 0U;
 
 	/* flush? */
-	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
+	if (UNLIKELY(out_buf_flsh(len + 1U)) < 0) {
 		return -1;
 	}
 	/* resize? */
-	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
+	if (UNLIKELY(out_buf_resz(len + 1U) < 0)) {
 		return -1;
 	}
 	/* skip leading ws */
@@ -289,7 +256,7 @@ out_buf_push_esc_nws(const char *str, size_t len)
 		}
 		break;
 	}
-	/* now esc-copy */
+	/* now nsw-copy */
 	for (; i < len; i++) {
 		switch (str[i]) {
 		default:
@@ -300,11 +267,6 @@ out_buf_push_esc_nws(const char *str, size_t len)
 		case '\n':
 		case '\f':
 			obuf[obix + clen++] = ' ';
-			break;
-		case '"':
-		case '\\':
-			obuf[obix + clen++] = '\\';
-			obuf[obix + clen++] = str[i];
 			break;
 		}
 	}
@@ -383,9 +345,9 @@ sax_eo(void *ctx, const xmlChar *name)
 		/* principal type info */
 		out_buf_push("ol:", 3U);
 		out_buf_push(sbuf + r->lei, r->llen);
-		out_buf_push("\t\"", 2U);
-		out_buf_push_esc_nws(sbuf + r->name, r->nlen);
-		out_buf_push("\"\n", 2U);
+		out_buf_push("\t", 1U);
+		out_buf_push_nws(sbuf + r->name, r->nlen);
+		out_buf_push("\n", 1U);
 
 		memset(r, 0, sizeof(*r));
 		sax_buf_reset();
