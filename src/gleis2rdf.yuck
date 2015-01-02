@@ -1,0 +1,4 @@
+Usage: gleis2rdf [FILE]...
+
+Convert c-lei.org or pre-lei.org XML FILE to turtle.
+If FILE is omitted use stdin.
