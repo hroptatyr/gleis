@@ -498,9 +498,9 @@ sax_eo(void *ctx, const xmlChar *name)
 			
 			out_buf_push(";\n   ", 5U);
 			out_buf_push(tag, sizeof(tag) - 1U);
-			out_buf_push(" \"", 2U);
+			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc_nws(sbuf + r->name, r->nlen);
-			out_buf_push("\" ", 2U);
+			out_buf_push("\"\"\" ", 4U);
 		}
 		if (r->flen) {
 			/* append legal form */
@@ -508,18 +508,18 @@ sax_eo(void *ctx, const xmlChar *name)
 
 			out_buf_push(";\n   ", 5U);
 			out_buf_push(tag, sizeof(tag) - 1U);
-			out_buf_push(" \"", 2U);
+			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->form, r->flen);
-			out_buf_push("\" ", 2U);
+			out_buf_push("\"\"\" ", 4U);
 		}
 		if (r->jlen) {
 			/* append legal form */
 			static const char tag[] = "lei:LegalJurisdiction";
 			out_buf_push(";\n   ", 5U);
 			out_buf_push(tag, sizeof(tag) - 1U);
-			out_buf_push(" \"", 2U);
+			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->jrsd, r->jlen);
-			out_buf_push("\" ", 2U);
+			out_buf_push("\"\"\" ", 4U);
 		}
 
 		out_buf_push(".\n", 2U);
