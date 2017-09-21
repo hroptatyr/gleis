@@ -40,6 +40,8 @@ AC_PROG_RANLIB
 ## check if yuck is globally available
 AX_CHECK_YUCK
 
+PKG_CHECK_MODULES([libxml], [libxml-2.0])
+
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([build-aux/Makefile])
 AC_CONFIG_FILES([src/Makefile])

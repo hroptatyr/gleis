@@ -21,17 +21,17 @@ EXTRA_DIST += version.c.in
 bin_PROGRAMS += gleis2rdf
 gleis2rdf_SOURCES = gleis2rdf.c gleis2rdf.yuck
 gleis2rdf_CPPFLAGS = $(AM_CPPFLAGS)
-gleis2rdf_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
+gleis2rdf_CPPFLAGS += $(libxml_CFLAGS)
 gleis2rdf_LDFLAGS = $(AM_LDFLAGS)
-gleis2rdf_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+gleis2rdf_LDFLAGS += $(libxml_LIBS)
 BUILT_SOURCES += gleis2rdf.yucc
 
 bin_PROGRAMS += gleis4dbpjoin
 gleis4dbpjoin_SOURCES = gleis4dbpjoin.c gleis4dbpjoin.yuck
 gleis4dbpjoin_CPPFLAGS = $(AM_CPPFLAGS)
-gleis4dbpjoin_CPPFLAGS += $(shell pkg-config --cflags libxml-2.0)
+gleis4dbpjoin_CPPFLAGS += $(libxml_CFLAGS)
 gleis4dbpjoin_LDFLAGS = $(AM_LDFLAGS)
-gleis4dbpjoin_LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+gleis4dbpjoin_LDFLAGS += $(libxml_LIBS)
 BUILT_SOURCES += gleis4dbpjoin.yucc
 
 
