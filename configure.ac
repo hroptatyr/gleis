@@ -30,11 +30,12 @@ AX_YUCK_SCMVER([version.mk])
 AC_CONFIG_LINKS([GNUmakefile:GNUmakefile])
 
 ## the build chain
-AC_PROG_CC([icc tcc gcc cc])
-SXE_CHECK_CC([c11 c1x c99 gnu99])
+AC_PROG_CC([icc cc gcc])
+SXE_CHECK_CC([gnu11])
 SXE_CHECK_CFLAGS
 AC_CHECK_TOOLS([AR], [xiar ar], [false])
 AC_C_BIGENDIAN
+AC_PROG_RANLIB
 
 ## check if yuck is globally available
 AX_CHECK_YUCK
