@@ -40,11 +40,6 @@ AC_PROG_RANLIB
 ## check if yuck is globally available
 AX_CHECK_YUCK
 
-## libtool goddess^Wgoodness
-## has to be down here as we're turning -Werror'ing off
-LT_INIT
-SXE_CHECK_LDFLAGS
-
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([build-aux/Makefile])
 AC_CONFIG_FILES([src/Makefile])
