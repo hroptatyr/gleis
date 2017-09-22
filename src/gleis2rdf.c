@@ -60,6 +60,7 @@
 # define UNLIKELY(_x)	__builtin_expect((_x), 0)
 #endif
 #define countof(_x)	(sizeof(_x) / sizeof(*_x))
+#define strlenof(_x)	(sizeof(_x) - 1U)
 
 struct lei_s {
 	off_t lei;
@@ -90,6 +91,16 @@ tag_massage(const char *tag)
 	}
 	/* otherwise just return the tag as is */
 	return tag;
+}
+
+static inline __attribute__((pure, const)) char
+c2h(int x)
+{
+	const unsigned char y = (unsigned char)(x & 0b1111U);
+	if (y < 10) {
+		return (char)(y ^ '0');
+	}
+	return (char)(y + '7');
 }
 
 
@@ -268,6 +279,34 @@ out_buf_push_esc(const char *str, size_t len)
 }
 
 static int
+out_buf_push_url(const char *str, size_t len)
+{
+/* like out_buf_push() but % escape things */
+	size_t clen = 0U;
+
+	/* flush? */
+	if (UNLIKELY(out_buf_flsh(3U * len)) < 0) {
+		return -1;
+	}
+	/* resize? */
+	if (UNLIKELY(out_buf_resz(3U * len) < 0)) {
+		return -1;
+	}
+	/* now esc-copy */
+	for (size_t i = 0U; i < len; i++) {
+		if (str[i] >= '0') {
+			obuf[obix + clen++] = str[i];
+		} else {
+			obuf[obix + clen++] = '%';
+			obuf[obix + clen++] = c2h(str[i] >> 4U);
+			obuf[obix + clen++] = c2h(str[i] >> 0U);
+		}
+	}
+	obuf[obix += clen] = '\0';
+	return 0;
+}
+
+static int
 out_buf_push_esc_nws(const char *str, size_t len)
 {
 /* like out_buf_push_esc() but also normalise whitespace */
@@ -380,7 +419,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		} else {
 			break;
 		}
-		out_buf_push(pre, sizeof(pre) - 1U);
+		out_buf_push(pre, strlenof(pre));
 		break;
 
 	case FL_CLEIS:
@@ -522,7 +561,7 @@ sax_eo(void *ctx, const xmlChar *name)
 			static const char tag[] = "lei:LegalName";
 			
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc_nws(sbuf + r->name, r->nlen);
 			if (!*r->lang) {
@@ -535,18 +574,28 @@ sax_eo(void *ctx, const xmlChar *name)
 		if (r->flen) {
 			/* append legal form */
 			static const char tag[] = "lei:LegalForm";
+			static const char typ[] = "rov:orgType";
+			static const char fpre[] = "http://openleis.com/legal_entities/search/legal_form/";
 
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->form, r->flen);
 			out_buf_push("\"\"\" ", 4U);
+
+			/* and as rov:orgType */
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(typ, strlenof(typ));
+			out_buf_push(" <", 2U);
+			out_buf_push(fpre, strlenof(fpre));
+			out_buf_push_url(sbuf + r->form, r->flen);
+			out_buf_push("> ", 2U);
 		}
 		if (r->jlen) {
 			/* append legal form */
 			static const char tag[] = "lei:LegalJurisdiction";
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->jrsd, r->jlen);
 			out_buf_push("\"\"\" ", 4U);
@@ -563,7 +612,7 @@ sax_eo(void *ctx, const xmlChar *name)
 			/* append status */
 			static const char tag[] = "rov:orgStatus";
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"", 2U);
 			out_buf_push(sbuf + r->stat, r->slen);
 			out_buf_push("\" ", 2U);
