@@ -42,7 +42,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
-#include <assert.h>
 #if defined __INTEL_COMPILER
 # pragma warning (disable:1292)
 #endif  /* __INTEL_COMPILER */
@@ -61,16 +60,20 @@
 # define UNLIKELY(_x)	__builtin_expect((_x), 0)
 #endif
 #define countof(_x)	(sizeof(_x) / sizeof(*_x))
+#define strlenof(_x)	(sizeof(_x) - 1U)
 
 struct lei_s {
-	size_t lei;
+	off_t lei;
 	size_t llen;
-	size_t name;
+	off_t name;
 	size_t nlen;
-	size_t form;
+	off_t form;
 	size_t flen;
-	size_t jrsd;
+	off_t jrsd;
 	size_t jlen;
+	off_t stat;
+	size_t slen;
+	char lang[8U];
 };
 
 
@@ -88,6 +91,16 @@ tag_massage(const char *tag)
 	}
 	/* otherwise just return the tag as is */
 	return tag;
+}
+
+static inline __attribute__((pure, const)) char
+c2h(int x)
+{
+	const unsigned char y = (unsigned char)(x & 0b1111U);
+	if (y < 10) {
+		return (char)(y ^ '0');
+	}
+	return (char)(y + '7');
 }
 
 
@@ -266,6 +279,34 @@ out_buf_push_esc(const char *str, size_t len)
 }
 
 static int
+out_buf_push_url(const char *str, size_t len)
+{
+/* like out_buf_push() but % escape things */
+	size_t clen = 0U;
+
+	/* flush? */
+	if (UNLIKELY(out_buf_flsh(3U * len)) < 0) {
+		return -1;
+	}
+	/* resize? */
+	if (UNLIKELY(out_buf_resz(3U * len) < 0)) {
+		return -1;
+	}
+	/* now esc-copy */
+	for (size_t i = 0U; i < len; i++) {
+		if (str[i] >= '0') {
+			obuf[obix + clen++] = str[i];
+		} else {
+			obuf[obix + clen++] = '%';
+			obuf[obix + clen++] = c2h(str[i] >> 4U);
+			obuf[obix + clen++] = c2h(str[i] >> 0U);
+		}
+	}
+	obuf[obix += clen] = '\0';
+	return 0;
+}
+
+static int
 out_buf_push_esc_nws(const char *str, size_t len)
 {
 /* like out_buf_push_esc() but also normalise whitespace */
@@ -366,6 +407,8 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		static const char pre[] = "\
 @prefix ol: <http://openleis.com/legal_entities/> .\n\
 @prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
+@prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
+@prefix rov: http://www.w3.org/ns/regorg#> .\n\
 \n";
 
 	case FL_UNK:
@@ -376,7 +419,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		} else {
 			break;
 		}
-		out_buf_push(pre, sizeof(pre) - 1U);
+		out_buf_push(pre, strlenof(pre));
 		break;
 
 	case FL_CLEIS:
@@ -386,11 +429,18 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 			} else if (!strcmp(rname, "LegalName")) {
 				r->name = sbix;
 				pushp = true;
+				if (atts) {
+					/* snarf language tag */
+					goto lang;
+				}
 			} else if (!strcmp(rname, "LegalForm")) {
 				r->form = sbix;
 				pushp = true;
 			} else if (!strcmp(rname, "LegalJurisdiction")) {
 				r->jrsd = sbix;
+				pushp = true;
+			} else if (!strcmp(rname, "EntityStatus")) {
+				r->stat = sbix;
 				pushp = true;
 			}
 		} else if (!strcmp(rname, "Entity")) {
@@ -398,6 +448,16 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		} else if (!strcmp(rname, "LEI")) {
 			r->lei = sbix;
 			pushp = true;
+		}
+		break;
+	lang:
+		for (const xmlChar **a = atts; *a; a++) {
+			const char *aname = tag_massage((const char*)*a++);
+			if (!strcmp(aname, "lang")) {
+				const char *lang = (const char*)*a;
+				const size_t llen = strlen(lang);
+				memcpy(r->lang, lang, llen < 7U ? llen : 7U);
+			}
 		}
 		break;
 
@@ -444,6 +504,8 @@ sax_eo(void *ctx, const xmlChar *name)
 				r->flen = sbix - r->form;
 			} else if (!strcmp(rname, "LegalJurisdiction")) {
 				r->jlen = sbix - r->jrsd;
+			} else if (!strcmp(rname, "EntityStatus")) {
+				r->slen = sbix - r->stat;
 			} else if (!strcmp(rname, "Entity")) {
 				in_ent_p = false;
 			}
@@ -492,34 +554,68 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push("ol:", 3U);
 		out_buf_push(sbuf + r->lei, r->llen);
 		out_buf_push(" a lei:LEI ", 11U);
+		out_buf_push(", fibo-be-le-lei:LegalEntityIdentifier ", 39U);
+		out_buf_push(", fibo-be-le-lei:ContractuallyCapableEntity ", 44U);
 
 		if (r->nlen) {
 			static const char tag[] = "lei:LegalName";
 			
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc_nws(sbuf + r->name, r->nlen);
-			out_buf_push("\"\"\" ", 4U);
+			if (!*r->lang) {
+				out_buf_push("\"\"\" ", 4U);
+			} else {
+				out_buf_push("\"\"\"@", 4U);
+				out_buf_push(r->lang, strlen(r->lang));
+			}
 		}
 		if (r->flen) {
 			/* append legal form */
 			static const char tag[] = "lei:LegalForm";
+			static const char typ[] = "rov:orgType";
+			static const char fpre[] = "http://openleis.com/legal_entities/search/legal_form/";
 
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->form, r->flen);
 			out_buf_push("\"\"\" ", 4U);
+
+			/* and as rov:orgType */
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(typ, strlenof(typ));
+			out_buf_push(" <", 2U);
+			out_buf_push(fpre, strlenof(fpre));
+			out_buf_push_url(sbuf + r->form, r->flen);
+			out_buf_push("> ", 2U);
 		}
 		if (r->jlen) {
 			/* append legal form */
 			static const char tag[] = "lei:LegalJurisdiction";
 			out_buf_push(";\n   ", 5U);
-			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->jrsd, r->jlen);
 			out_buf_push("\"\"\" ", 4U);
+
+			/* and again as fibo-be-le-lei statement */
+			out_buf_push(";\n   ", 5U);
+			out_buf_push("fibo-be-le-lei:isRecognizedIn", 29U);
+			out_buf_push(" <http://schema.ga-group.nl/jurisdictions#", 43U);
+			out_buf_push(sbuf + r->jrsd, r->jlen);
+			out_buf_push("> ", 2U);
+		}
+
+		if (r->slen) {
+			/* append status */
+			static const char tag[] = "rov:orgStatus";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"", 2U);
+			out_buf_push(sbuf + r->stat, r->slen);
+			out_buf_push("\" ", 2U);
 		}
 
 		out_buf_push(".\n", 2U);
