@@ -63,14 +63,16 @@
 #define countof(_x)	(sizeof(_x) / sizeof(*_x))
 
 struct lei_s {
-	size_t lei;
+	off_t lei;
 	size_t llen;
-	size_t name;
+	off_t name;
 	size_t nlen;
-	size_t form;
+	off_t form;
 	size_t flen;
-	size_t jrsd;
+	off_t jrsd;
 	size_t jlen;
+	off_t stat;
+	size_t slen;
 };
 
 
@@ -367,6 +369,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 @prefix ol: <http://openleis.com/legal_entities/> .\n\
 @prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
 @prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
+@prefix rov: http://www.w3.org/ns/regorg#> .\n\
 \n";
 
 	case FL_UNK:
@@ -392,6 +395,9 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 				pushp = true;
 			} else if (!strcmp(rname, "LegalJurisdiction")) {
 				r->jrsd = sbix;
+				pushp = true;
+			} else if (!strcmp(rname, "EntityStatus")) {
+				r->stat = sbix;
 				pushp = true;
 			}
 		} else if (!strcmp(rname, "Entity")) {
@@ -445,6 +451,8 @@ sax_eo(void *ctx, const xmlChar *name)
 				r->flen = sbix - r->form;
 			} else if (!strcmp(rname, "LegalJurisdiction")) {
 				r->jlen = sbix - r->jrsd;
+			} else if (!strcmp(rname, "EntityStatus")) {
+				r->slen = sbix - r->stat;
 			} else if (!strcmp(rname, "Entity")) {
 				in_ent_p = false;
 			}
@@ -530,6 +538,16 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(" <http://schema.ga-group.nl/jurisdictions#", 43U);
 			out_buf_push(sbuf + r->jrsd, r->jlen);
 			out_buf_push("> ", 2U);
+		}
+
+		if (r->slen) {
+			/* append status */
+			static const char tag[] = "rov:orgStatus";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, sizeof(tag) - 1U);
+			out_buf_push(" \"", 2U);
+			out_buf_push(sbuf + r->stat, r->slen);
+			out_buf_push("\" ", 2U);
 		}
 
 		out_buf_push(".\n", 2U);
