@@ -366,6 +366,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		static const char pre[] = "\
 @prefix ol: <http://openleis.com/legal_entities/> .\n\
 @prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
+@prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
 \n";
 
 	case FL_UNK:
@@ -492,6 +493,8 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push("ol:", 3U);
 		out_buf_push(sbuf + r->lei, r->llen);
 		out_buf_push(" a lei:LEI ", 11U);
+		out_buf_push(", fibo-be-le-lei:LegalEntityIdentifier ", 39U);
+		out_buf_push(", fibo-be-le-lei:ContractuallyCapableEntity ", 44U);
 
 		if (r->nlen) {
 			static const char tag[] = "lei:LegalName";
@@ -520,6 +523,13 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc(sbuf + r->jrsd, r->jlen);
 			out_buf_push("\"\"\" ", 4U);
+
+			/* and again as fibo-be-le-lei statement */
+			out_buf_push(";\n   ", 5U);
+			out_buf_push("fibo-be-le-lei:isRecognizedIn", 29U);
+			out_buf_push(" <http://schema.ga-group.nl/jurisdictions#", 43U);
+			out_buf_push(sbuf + r->jrsd, r->jlen);
+			out_buf_push("> ", 2U);
 		}
 
 		out_buf_push(".\n", 2U);
