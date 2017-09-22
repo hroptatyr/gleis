@@ -42,7 +42,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
-#include <assert.h>
 #if defined __INTEL_COMPILER
 # pragma warning (disable:1292)
 #endif  /* __INTEL_COMPILER */
@@ -73,6 +72,7 @@ struct lei_s {
 	size_t jlen;
 	off_t stat;
 	size_t slen;
+	char lang[8U];
 };
 
 
@@ -390,6 +390,10 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 			} else if (!strcmp(rname, "LegalName")) {
 				r->name = sbix;
 				pushp = true;
+				if (atts) {
+					/* snarf language tag */
+					goto lang;
+				}
 			} else if (!strcmp(rname, "LegalForm")) {
 				r->form = sbix;
 				pushp = true;
@@ -405,6 +409,16 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 		} else if (!strcmp(rname, "LEI")) {
 			r->lei = sbix;
 			pushp = true;
+		}
+		break;
+	lang:
+		for (const xmlChar **a = atts; *a; a++) {
+			const char *aname = tag_massage((const char*)*a++);
+			if (!strcmp(aname, "lang")) {
+				const char *lang = (const char*)*a;
+				const size_t llen = strlen(lang);
+				memcpy(r->lang, lang, llen < 7U ? llen : 7U);
+			}
 		}
 		break;
 
@@ -511,7 +525,12 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(tag, sizeof(tag) - 1U);
 			out_buf_push(" \"\"\"", 4U);
 			out_buf_push_esc_nws(sbuf + r->name, r->nlen);
-			out_buf_push("\"\"\" ", 4U);
+			if (!*r->lang) {
+				out_buf_push("\"\"\" ", 4U);
+			} else {
+				out_buf_push("\"\"\"@", 4U);
+				out_buf_push(r->lang, strlen(r->lang));
+			}
 		}
 		if (r->flen) {
 			/* append legal form */
