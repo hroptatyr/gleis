@@ -408,7 +408,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 @prefix ol: <http://openleis.com/legal_entities/> .\n\
 @prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
 @prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
-@prefix rov: http://www.w3.org/ns/regorg#> .\n\
+@prefix rov: <http://www.w3.org/ns/regorg#> .\n\
 \n";
 
 	case FL_UNK:
