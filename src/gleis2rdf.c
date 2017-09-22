@@ -607,7 +607,7 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push("fibo-be-le-lei:isRecognizedIn", 29U);
 			out_buf_push(" <", 2U);
 			out_buf_push(jur, strlenof(jur));
-			out_buf_push(sbuf + r->jrsd, r->jlen);
+			out_buf_push_url(sbuf + r->jrsd, r->jlen);
 			out_buf_push("> ", 2U);
 		}
 
