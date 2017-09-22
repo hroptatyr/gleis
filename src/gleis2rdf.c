@@ -594,6 +594,8 @@ sax_eo(void *ctx, const xmlChar *name)
 		if (r->jlen) {
 			/* append legal form */
 			static const char tag[] = "lei:LegalJurisdiction";
+			static const char jur[] = "http://schema.ga-group.nl/jurisdictions#";
+
 			out_buf_push(";\n   ", 5U);
 			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"\"\"", 4U);
@@ -603,7 +605,8 @@ sax_eo(void *ctx, const xmlChar *name)
 			/* and again as fibo-be-le-lei statement */
 			out_buf_push(";\n   ", 5U);
 			out_buf_push("fibo-be-le-lei:isRecognizedIn", 29U);
-			out_buf_push(" <http://schema.ga-group.nl/jurisdictions#", 43U);
+			out_buf_push(" <", 2U);
+			out_buf_push(jur, strlenof(jur));
 			out_buf_push(sbuf + r->jrsd, r->jlen);
 			out_buf_push("> ", 2U);
 		}
