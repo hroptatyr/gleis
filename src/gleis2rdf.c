@@ -571,7 +571,7 @@ sax_eo(void *ctx, const xmlChar *name)
 				out_buf_push(r->lang, strlen(r->lang));
 			}
 		}
-		if (r->flen) {
+		if (r->flen && sbuf[r->form] != '<') {
 			/* append legal form */
 			static const char tag[] = "lei:LegalForm";
 			static const char typ[] = "rov:orgType";
