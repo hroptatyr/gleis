@@ -294,7 +294,7 @@ out_buf_push_url(const char *str, size_t len)
 	}
 	/* now esc-copy */
 	for (size_t i = 0U; i < len; i++) {
-		if (str[i] >= '0') {
+		if (str[i] >= ',' && str[i] != '/') {
 			obuf[obix + clen++] = str[i];
 		} else {
 			obuf[obix + clen++] = '%';
