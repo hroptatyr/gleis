@@ -93,7 +93,7 @@ tag_massage(const char *tag)
 	return tag;
 }
 
-static inline __attribute__((pure, const)) char
+static inline __attribute__((unused, pure, const)) char
 c2h(int x)
 {
 	const unsigned char y = (unsigned char)(x & 0b1111U);
@@ -279,27 +279,33 @@ out_buf_push_esc(const char *str, size_t len)
 }
 
 static int
-out_buf_push_url(const char *str, size_t len)
+out_buf_push_iri(const char *str, size_t len)
 {
 /* like out_buf_push() but % escape things */
 	size_t clen = 0U;
 
 	/* flush? */
-	if (UNLIKELY(out_buf_flsh(3U * len)) < 0) {
+	if (UNLIKELY(out_buf_flsh(6U * len)) < 0) {
 		return -1;
 	}
 	/* resize? */
-	if (UNLIKELY(out_buf_resz(3U * len) < 0)) {
+	if (UNLIKELY(out_buf_resz(6U * len) < 0)) {
 		return -1;
 	}
 	/* now esc-copy */
 	for (size_t i = 0U; i < len; i++) {
-		if (str[i] >= ',' && str[i] != '/') {
+		switch (str[i]) {
+		case '>':
+			memcpy(obuf + obix + clen, "\\u003E", 6U);
+			clen += 6U;
+			break;
+		case '<':
+			memcpy(obuf + obix + clen, "\\u003C", 6U);
+			clen += 6U;
+			break;
+		default:
 			obuf[obix + clen++] = str[i];
-		} else {
-			obuf[obix + clen++] = '%';
-			obuf[obix + clen++] = c2h(str[i] >> 4U);
-			obuf[obix + clen++] = c2h(str[i] >> 0U);
+			break;
 		}
 	}
 	obuf[obix += clen] = '\0';
@@ -588,7 +594,7 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(typ, strlenof(typ));
 			out_buf_push(" <", 2U);
 			out_buf_push(fpre, strlenof(fpre));
-			out_buf_push_url(sbuf + r->form, r->flen);
+			out_buf_push_iri(sbuf + r->form, r->flen);
 			out_buf_push("> ", 2U);
 		}
 		if (r->jlen) {
@@ -607,7 +613,7 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push("fibo-be-le-lei:isRecognizedIn", 29U);
 			out_buf_push(" <", 2U);
 			out_buf_push(jur, strlenof(jur));
-			out_buf_push_url(sbuf + r->jrsd, r->jlen);
+			out_buf_push_iri(sbuf + r->jrsd, r->jlen);
 			out_buf_push("> ", 2U);
 		}
 
