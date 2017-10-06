@@ -415,6 +415,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 @prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
 @prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
 @prefix rov: <http://www.w3.org/ns/regorg#> .\n\
+@prefix gas: <http://schema.ga-group.nl/symbology#> .\n\
 \n";
 
 	case FL_UNK:
@@ -560,8 +561,18 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push("ol:", 3U);
 		out_buf_push(sbuf + r->lei, r->llen);
 		out_buf_push(" a lei:LEI ", 11U);
-		out_buf_push(", fibo-be-le-lei:LegalEntityIdentifier ", 39U);
-		out_buf_push(", fibo-be-le-lei:ContractuallyCapableEntity ", 44U);
+
+		static const char lei[] =
+			", fibo-be-le-lei:LegalEntityIdentifier ";
+		static const char cce[] =
+			", fibo-be-le-lei:ContractuallyCapableEntity ";
+		out_buf_push(lei, strlenof(lei));
+		out_buf_push(cce, strlenof(cce));
+
+		static const char sof[] =
+			";\n   gas:symbolOf <http://openleis.com> ";
+
+		out_buf_push(sof, strlenof(sof));
 
 		if (r->nlen) {
 			static const char tag[] = "lei:LegalName";
