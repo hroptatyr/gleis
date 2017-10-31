@@ -411,8 +411,8 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 
 	switch (flavour) {
 		static const char pre[] = "\
-@prefix ol: <http://openleis.com/legal_entities/> .\n\
-@prefix lei: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
+@prefix lei: <http://openleis.com/legal_entities/> .\n\
+@prefix leiroc: <http://www.leiroc.org/data/schema/leidata/2014/> .\n\
 @prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
 @prefix rov: <http://www.w3.org/ns/regorg#> .\n\
 @prefix gas: <http://schema.ga-group.nl/symbology#> .\n\
@@ -558,9 +558,9 @@ sax_eo(void *ctx, const xmlChar *name)
 
 	print:
 		/* principal type info */
-		out_buf_push("ol:", 3U);
+		out_buf_push("lei:", 4U);
 		out_buf_push(sbuf + r->lei, r->llen);
-		out_buf_push(" a lei:LEI ", 11U);
+		out_buf_push(" a leiroc:LEI ", 14U);
 
 		static const char lei[] =
 			", fibo-be-le-lei:LegalEntityIdentifier ";
@@ -575,7 +575,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push(sof, strlenof(sof));
 
 		if (r->nlen) {
-			static const char tag[] = "lei:LegalName";
+			static const char tag[] = "leiroc:LegalName";
 			
 			out_buf_push(";\n   ", 5U);
 			out_buf_push(tag, strlenof(tag));
@@ -590,7 +590,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		}
 		if (r->flen && sbuf[r->form] != '<') {
 			/* append legal form */
-			static const char tag[] = "lei:LegalForm";
+			static const char tag[] = "leiroc:LegalForm";
 			static const char typ[] = "rov:orgType";
 			static const char fpre[] = "http://openleis.com/legal_entities/search/legal_form/";
 
@@ -610,7 +610,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		}
 		if (r->jlen) {
 			/* append legal form */
-			static const char tag[] = "lei:LegalJurisdiction";
+			static const char tag[] = "leiroc:LegalJurisdiction";
 			static const char jur[] = "http://schema.ga-group.nl/jurisdictions#";
 
 			out_buf_push(";\n   ", 5U);
