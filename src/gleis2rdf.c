@@ -303,6 +303,14 @@ out_buf_push_iri(const char *str, size_t len)
 			memcpy(obuf + obix + clen, "\\u003C", 6U);
 			clen += 6U;
 			break;
+		case '"':
+			memcpy(obuf + obix + clen, "\\u0022", 6U);
+			clen += 6U;
+			break;
+		case '\n':
+			memcpy(obuf + obix + clen, "\\u000A", 6U);
+			clen += 6U;
+			break;
 		default:
 			obuf[obix + clen++] = str[i];
 			break;
