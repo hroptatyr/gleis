@@ -578,7 +578,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		out_buf_push(cce, strlenof(cce));
 
 		static const char sof[] =
-			";\n   gas:symbolOf <http://openleis.com> ";
+			";\n   gas:symbolOf <http://openleis.com/> ";
 
 		out_buf_push(sof, strlenof(sof));
 
