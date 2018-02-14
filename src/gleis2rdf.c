@@ -79,6 +79,8 @@ struct lei_s {
 	off_t stat;
 	size_t slen;
 	char lang[8U];
+	off_t date;
+	size_t dlen;
 };
 
 
@@ -341,10 +343,22 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 			flavour = FL_CLEIS;
 		} else if (!strcmp(rname, "LEIRegistrations")) {
 			flavour = FL_PLEIS;
+		} else if (!strcmp((const char*)name, "lei:ContentDate")) {
+			r->date = sbix;
+			pushp = true;
+			break;
 		} else {
 			break;
 		}
 		out_buf_push(pre, strlenof(pre));
+
+		if (r->dlen) {
+			static const char tpre[] = "\
+@prefix TIME: <", post[] = "> .\n";
+			out_buf_push(tpre, strlenof(tpre));
+			out_buf_push(sbuf + r->date, r->dlen);
+			out_buf_push(post, strlenof(post));
+		}
 		break;
 
 	case FL_CLEIS:
@@ -417,6 +431,10 @@ sax_eo(void *ctx, const xmlChar *name)
 
 	switch (flavour) {
 	case FL_UNK:
+		if (!strcmp((const char*)name, "lei:ContentDate")) {
+			r->dlen = sbix - r->date;
+		}
+		pushp = false;
 		break;
 
 	case FL_CLEIS:
@@ -434,10 +452,8 @@ sax_eo(void *ctx, const xmlChar *name)
 			} else if (!strcmp(rname, "Entity")) {
 				in_ent_p = false;
 			}
-			pushp = false;
 		} else if (!strcmp(rname, "LEI")) {
 			r->llen = sbix - r->lei;
-			pushp = false;
 		} else if (!strcmp(rname, "LEIRecord")) {
 			if (r->llen) {
 				goto print;
@@ -446,21 +462,18 @@ sax_eo(void *ctx, const xmlChar *name)
 		} else if (!strcmp(rname, "LEIRecords")) {
 			goto final;
 		}
+		pushp = false;
 		break;
 
 	case FL_PLEIS:
 		if (!strcmp(rname, "LegalEntityIdentifier")) {
 			r->llen = sax_buf_massage(r->lei) - r->lei;
-			pushp = false;
 		} else if (!strcmp(rname, "RegisteredName")) {
 			r->nlen = sax_buf_massage(r->name) - r->name;
-			pushp = false;
 		} else if (!strcmp(rname, "EntityLegalForm")) {
 			r->flen = sax_buf_massage(r->form) - r->form;
-			pushp = false;
 		} else if (!strcmp(rname, "RegisteredCountryCode")) {
 			r->jlen = sax_buf_massage(r->jrsd) - r->jrsd;
-			pushp = false;
 		} else if (!strcmp(rname, "LEIRegistration")) {
 			if (r->llen) {
 				goto print;
@@ -469,6 +482,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		} else if (!strcmp(rname, "LEIRegistrations")) {
 			goto final;
 		}
+		pushp = false;
 		break;
 
 	default:
