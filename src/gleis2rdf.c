@@ -83,6 +83,8 @@ struct lei_s {
 	size_t dlen;
 	off_t irdate;
 	size_t irdlen;
+	off_t ludate;
+	size_t ludlen;
 };
 
 
@@ -392,6 +394,9 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 			} else if (!strcmp(rname, "InitialRegistrationDate")) {
 				r->irdate = sbix;
 				pushp = true;
+			} else if (!strcmp(rname, "LastUpdateDate")) {
+				r->ludate = sbix;
+				pushp = true;
 			}
 		} else if (!strcmp(rname, "Entity")) {
 			in_ent_p = true;
@@ -470,6 +475,8 @@ sax_eo(void *ctx, const xmlChar *name)
 				;
 			} else if (!strcmp(rname, "InitialRegistrationDate")) {
 				r->irdlen = sbix - r->irdate;
+			} else if (!strcmp(rname, "LastUpdateDate")) {
+				r->ludlen = sbix - r->ludate;
 			} else if (!strcmp(rname, "Registration")) {
 				in_reg_p = false;
 			}
@@ -510,6 +517,15 @@ sax_eo(void *ctx, const xmlChar *name)
 		break;
 
 	print:
+		/* provenance service */
+		if (r->ludlen) {
+			static const char pre[] = "\
+@prefix MODD: <", post[] = "> .\n";
+
+			out_buf_push(pre, strlenof(pre));
+			out_buf_push(sbuf + r->ludate, r->ludlen);
+			out_buf_push(post, strlenof(post));
+		}
 		/* principal type info */
 		out_buf_push("lei:", 4U);
 		out_buf_push(sbuf + r->lei, r->llen);
@@ -547,6 +563,14 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(tag, strlenof(tag));
 			out_buf_push(" \"", 2U);
 			out_buf_push(sbuf + r->irdate, r->irdlen);
+			out_buf_push("\"^^xsd:dateTime ", 16U);
+		}
+		if (r->ludlen) {
+			static const char tag[] = "leiroc:LastUpdateDate";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"", 2U);
+			out_buf_push(sbuf + r->ludate, r->ludlen);
 			out_buf_push("\"^^xsd:dateTime ", 16U);
 		}
 		if (r->flen && sbuf[r->form] != '<') {
