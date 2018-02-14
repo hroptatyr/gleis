@@ -81,6 +81,8 @@ struct lei_s {
 	char lang[8U];
 	off_t date;
 	size_t dlen;
+	off_t irdate;
+	size_t irdlen;
 };
 
 
@@ -301,6 +303,7 @@ out_buf_push_esc_nws(const char *str, size_t len)
 /* our SAX parser */
 static bool pushp;
 static bool in_ent_p;
+static bool in_reg_p;
 static enum {
 	FL_UNK,
 	FL_CLEIS,
@@ -336,6 +339,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 @prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
 @prefix rov: <http://www.w3.org/ns/regorg#> .\n\
 @prefix gas: <http://schema.ga-group.nl/symbology#> .\n\
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\
 \n";
 
 	case FL_UNK:
@@ -382,8 +386,17 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 				r->stat = sbix;
 				pushp = true;
 			}
+		} else if (in_reg_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "InitialRegistrationDate")) {
+				r->irdate = sbix;
+				pushp = true;
+			}
 		} else if (!strcmp(rname, "Entity")) {
 			in_ent_p = true;
+		} else if (!strcmp(rname, "Registration")) {
+			in_reg_p = true;
 		} else if (!strcmp(rname, "LEI")) {
 			r->lei = sbix;
 			pushp = true;
@@ -451,6 +464,14 @@ sax_eo(void *ctx, const xmlChar *name)
 				r->slen = sbix - r->stat;
 			} else if (!strcmp(rname, "Entity")) {
 				in_ent_p = false;
+			}
+		} else if (in_reg_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "InitialRegistrationDate")) {
+				r->irdlen = sbix - r->irdate;
+			} else if (!strcmp(rname, "Registration")) {
+				in_reg_p = false;
 			}
 		} else if (!strcmp(rname, "LEI")) {
 			r->llen = sbix - r->lei;
@@ -520,6 +541,14 @@ sax_eo(void *ctx, const xmlChar *name)
 				out_buf_push(r->lang, strlen(r->lang));
 			}
 		}
+		if (r->irdlen) {
+			static const char tag[] = "leiroc:InitialRegistrationDate";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"", 2U);
+			out_buf_push(sbuf + r->irdate, r->irdlen);
+			out_buf_push("\"^^xsd:dateTime ", 16U);
+		}
 		if (r->flen && sbuf[r->form] != '<') {
 			/* append legal form */
 			static const char tag[] = "leiroc:LegalForm";
@@ -582,6 +611,7 @@ sax_eo(void *ctx, const xmlChar *name)
 		fflush(stdout);
 		flavour = FL_UNK;
 		in_ent_p = false;
+		in_reg_p = false;
 		pushp = false;
 		goto reset;
 	}
