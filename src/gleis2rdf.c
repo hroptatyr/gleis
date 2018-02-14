@@ -62,6 +62,11 @@
 #define countof(_x)	(sizeof(_x) / sizeof(*_x))
 #define strlenof(_x)	(sizeof(_x) - 1U)
 
+#if defined __GLIBC__ && __GLIBC__ >= 2
+# define fputc	fputc_unlocked
+# define fwrite	fwrite_unlocked
+#endif
+
 struct lei_s {
 	off_t lei;
 	size_t llen;
@@ -108,11 +113,6 @@ c2h(int x)
 static char *sbuf;
 static size_t sbix;
 static size_t sbsz;
-
-/* output buffer */
-static char *obuf;
-static size_t obix;
-static size_t obsz;
 
 static int
 sax_buf_resz(size_t len)
@@ -189,59 +189,9 @@ sax_buf_reset(void)
 }
 
 static int
-out_buf_flsh(size_t len)
-{
-#define FORCE_FLUSH	((size_t)-1)
-	if (UNLIKELY(len == FORCE_FLUSH)) {
-		/* definitely flush */
-		;
-	} else if (LIKELY(obix + len <= obsz)) {
-		/* no flush */
-		return 0;
-	} else if (UNLIKELY(!obix)) {
-		return 0;
-	}
-	for (ssize_t nwr, tot = 0U; (size_t)tot < obix; tot += nwr) {
-		nwr = write(STDOUT_FILENO, obuf + tot, obix - tot);
-		if (UNLIKELY(nwr < 0)) {
-			return -1;
-		}
-	}
-	obix = 0U;
-	return 0;
-}
-
-static int
-out_buf_resz(size_t len)
-{
-	if (UNLIKELY(len > obsz)) {
-		/* resize */
-		size_t new_sz = len;
-
-		/* round to multiple of 4096 */
-		obsz = (new_sz & ~0xfff) + 4096L;
-		/* realloc now */
-		if (UNLIKELY((obuf = realloc(obuf, obsz)) == NULL)) {
-			return -1;
-		}
-	}
-	return 0;
-}
-
-static int
 out_buf_push(const char *str, size_t len)
 {
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(len) < 0)) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(len) < 0)) {
-		return -1;
-	}
-	/* now copy */
-	memcpy(obuf + obix, str, len);
-	obuf[obix += len] = '\0';
+	fwrite(str, sizeof(*str), len, stdout);
 	return 0;
 }
 
@@ -250,31 +200,18 @@ out_buf_push_esc(const char *str, size_t len)
 {
 /* like out_buf_push() but account for the necessity that we have
  * to escape every character */
-	size_t clen = 0U;
-
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
-		return -1;
-	}
 	/* now esc-copy */
 	for (size_t i = 0U; i < len; i++) {
 		switch (str[i]) {
-		default:
-			obuf[obix + clen++] = str[i];
-			break;
 		case '"':
 		case '\n':
 		case '\\':
-			obuf[obix + clen++] = '\\';
-			obuf[obix + clen++] = str[i];
+			fputc('\\', stdout);
+		default:
+			fputc(str[i], stdout);
 			break;
 		}
 	}
-	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -282,41 +219,26 @@ static int
 out_buf_push_iri(const char *str, size_t len)
 {
 /* like out_buf_push() but % escape things */
-	size_t clen = 0U;
-
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(6U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(6U * len) < 0)) {
-		return -1;
-	}
 	/* now esc-copy */
 	for (size_t i = 0U; i < len; i++) {
 		switch (str[i]) {
 		case '>':
-			memcpy(obuf + obix + clen, "\\u003E", 6U);
-			clen += 6U;
+			fwrite("\\u003E", sizeof(char), 6U, stdout);
 			break;
 		case '<':
-			memcpy(obuf + obix + clen, "\\u003C", 6U);
-			clen += 6U;
+			fwrite("\\u003C", sizeof(char), 6U, stdout);
 			break;
 		case '"':
-			memcpy(obuf + obix + clen, "\\u0022", 6U);
-			clen += 6U;
+			fwrite("\\u0022", sizeof(char), 6U, stdout);
 			break;
 		case '\n':
-			memcpy(obuf + obix + clen, "\\u000A", 6U);
-			clen += 6U;
+			fwrite("\\u000A", sizeof(char), 6U, stdout);
 			break;
 		default:
-			obuf[obix + clen++] = str[i];
+			fputc(str[i], stdout);
 			break;
 		}
 	}
-	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -325,16 +247,7 @@ out_buf_push_esc_nws(const char *str, size_t len)
 {
 /* like out_buf_push_esc() but also normalise whitespace */
 	size_t i = 0U;
-	size_t clen = 0U;
 
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
-		return -1;
-	}
 	/* skip leading ws */
 	for (i = 0U; i < len; i++) {
 		switch (str[i]) {
@@ -351,19 +264,17 @@ out_buf_push_esc_nws(const char *str, size_t len)
 	/* now esc-copy */
 	for (; i < len; i++) {
 		switch (str[i]) {
-		default:
-			obuf[obix + clen++] = str[i];
-			break;
 		case ' ':
 		case '\t':
 		case '\n':
 		case '\f':
-			obuf[obix + clen++] = ' ';
+			fputc(' ', stdout);
 			break;
 		case '"':
 		case '\\':
-			obuf[obix + clen++] = '\\';
-			obuf[obix + clen++] = str[i];
+			fputc('\\', stdout);
+		default:
+			fputc(str[i], stdout);
 			break;
 		}
 	}
@@ -381,7 +292,6 @@ out_buf_push_esc_nws(const char *str, size_t len)
 		break;
 	}
 	/* perfect */
-	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -655,7 +565,7 @@ sax_eo(void *ctx, const xmlChar *name)
 
 	final:
 		/* flush buffer */
-		out_buf_flsh(FORCE_FLUSH);
+		fflush(stdout);
 		flavour = FL_UNK;
 		in_ent_p = false;
 		pushp = false;
@@ -686,12 +596,6 @@ _parse(const char *file)
 		sbuf = NULL;
 		sbix = 0U;
 		sbsz = 0U;
-	}
-	if (LIKELY(obuf != NULL)) {
-		free(obuf);
-		obuf = NULL;
-		obix = 0U;
-		obsz = 0U;
 	}
 	return rc;
 }
