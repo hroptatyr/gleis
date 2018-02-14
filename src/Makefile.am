@@ -26,14 +26,6 @@ gleis2rdf_LDFLAGS = $(AM_LDFLAGS)
 gleis2rdf_LDFLAGS += $(libxml_LIBS)
 BUILT_SOURCES += gleis2rdf.yucc
 
-bin_PROGRAMS += gleis4dbpjoin
-gleis4dbpjoin_SOURCES = gleis4dbpjoin.c gleis4dbpjoin.yuck
-gleis4dbpjoin_CPPFLAGS = $(AM_CPPFLAGS)
-gleis4dbpjoin_CPPFLAGS += $(libxml_CFLAGS)
-gleis4dbpjoin_LDFLAGS = $(AM_LDFLAGS)
-gleis4dbpjoin_LDFLAGS += $(libxml_LIBS)
-BUILT_SOURCES += gleis4dbpjoin.yucc
-
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
