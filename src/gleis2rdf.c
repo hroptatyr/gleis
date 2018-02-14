@@ -62,6 +62,11 @@
 #define countof(_x)	(sizeof(_x) / sizeof(*_x))
 #define strlenof(_x)	(sizeof(_x) - 1U)
 
+#if defined __GLIBC__ && __GLIBC__ >= 2
+# define fputc	fputc_unlocked
+# define fwrite	fwrite_unlocked
+#endif
+
 struct lei_s {
 	off_t lei;
 	size_t llen;
@@ -74,6 +79,12 @@ struct lei_s {
 	off_t stat;
 	size_t slen;
 	char lang[8U];
+	off_t date;
+	size_t dlen;
+	off_t irdate;
+	size_t irdlen;
+	off_t ludate;
+	size_t ludlen;
 };
 
 
@@ -108,11 +119,6 @@ c2h(int x)
 static char *sbuf;
 static size_t sbix;
 static size_t sbsz;
-
-/* output buffer */
-static char *obuf;
-static size_t obix;
-static size_t obsz;
 
 static int
 sax_buf_resz(size_t len)
@@ -189,59 +195,9 @@ sax_buf_reset(void)
 }
 
 static int
-out_buf_flsh(size_t len)
-{
-#define FORCE_FLUSH	((size_t)-1)
-	if (UNLIKELY(len == FORCE_FLUSH)) {
-		/* definitely flush */
-		;
-	} else if (LIKELY(obix + len <= obsz)) {
-		/* no flush */
-		return 0;
-	} else if (UNLIKELY(!obix)) {
-		return 0;
-	}
-	for (ssize_t nwr, tot = 0U; (size_t)tot < obix; tot += nwr) {
-		nwr = write(STDOUT_FILENO, obuf + tot, obix - tot);
-		if (UNLIKELY(nwr < 0)) {
-			return -1;
-		}
-	}
-	obix = 0U;
-	return 0;
-}
-
-static int
-out_buf_resz(size_t len)
-{
-	if (UNLIKELY(len > obsz)) {
-		/* resize */
-		size_t new_sz = len;
-
-		/* round to multiple of 4096 */
-		obsz = (new_sz & ~0xfff) + 4096L;
-		/* realloc now */
-		if (UNLIKELY((obuf = realloc(obuf, obsz)) == NULL)) {
-			return -1;
-		}
-	}
-	return 0;
-}
-
-static int
 out_buf_push(const char *str, size_t len)
 {
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(len) < 0)) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(len) < 0)) {
-		return -1;
-	}
-	/* now copy */
-	memcpy(obuf + obix, str, len);
-	obuf[obix += len] = '\0';
+	fwrite(str, sizeof(*str), len, stdout);
 	return 0;
 }
 
@@ -250,31 +206,18 @@ out_buf_push_esc(const char *str, size_t len)
 {
 /* like out_buf_push() but account for the necessity that we have
  * to escape every character */
-	size_t clen = 0U;
-
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
-		return -1;
-	}
 	/* now esc-copy */
 	for (size_t i = 0U; i < len; i++) {
 		switch (str[i]) {
-		default:
-			obuf[obix + clen++] = str[i];
-			break;
 		case '"':
 		case '\n':
 		case '\\':
-			obuf[obix + clen++] = '\\';
-			obuf[obix + clen++] = str[i];
+			fputc('\\', stdout);
+		default:
+			fputc(str[i], stdout);
 			break;
 		}
 	}
-	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -282,41 +225,26 @@ static int
 out_buf_push_iri(const char *str, size_t len)
 {
 /* like out_buf_push() but % escape things */
-	size_t clen = 0U;
-
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(6U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(6U * len) < 0)) {
-		return -1;
-	}
 	/* now esc-copy */
 	for (size_t i = 0U; i < len; i++) {
 		switch (str[i]) {
 		case '>':
-			memcpy(obuf + obix + clen, "\\u003E", 6U);
-			clen += 6U;
+			fwrite("\\u003E", sizeof(char), 6U, stdout);
 			break;
 		case '<':
-			memcpy(obuf + obix + clen, "\\u003C", 6U);
-			clen += 6U;
+			fwrite("\\u003C", sizeof(char), 6U, stdout);
 			break;
 		case '"':
-			memcpy(obuf + obix + clen, "\\u0022", 6U);
-			clen += 6U;
+			fwrite("\\u0022", sizeof(char), 6U, stdout);
 			break;
 		case '\n':
-			memcpy(obuf + obix + clen, "\\u000A", 6U);
-			clen += 6U;
+			fwrite("\\u000A", sizeof(char), 6U, stdout);
 			break;
 		default:
-			obuf[obix + clen++] = str[i];
+			fputc(str[i], stdout);
 			break;
 		}
 	}
-	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -325,16 +253,7 @@ out_buf_push_esc_nws(const char *str, size_t len)
 {
 /* like out_buf_push_esc() but also normalise whitespace */
 	size_t i = 0U;
-	size_t clen = 0U;
 
-	/* flush? */
-	if (UNLIKELY(out_buf_flsh(2U * len)) < 0) {
-		return -1;
-	}
-	/* resize? */
-	if (UNLIKELY(out_buf_resz(2U * len) < 0)) {
-		return -1;
-	}
 	/* skip leading ws */
 	for (i = 0U; i < len; i++) {
 		switch (str[i]) {
@@ -351,19 +270,17 @@ out_buf_push_esc_nws(const char *str, size_t len)
 	/* now esc-copy */
 	for (; i < len; i++) {
 		switch (str[i]) {
-		default:
-			obuf[obix + clen++] = str[i];
-			break;
 		case ' ':
 		case '\t':
 		case '\n':
 		case '\f':
-			obuf[obix + clen++] = ' ';
+			fputc(' ', stdout);
 			break;
 		case '"':
 		case '\\':
-			obuf[obix + clen++] = '\\';
-			obuf[obix + clen++] = str[i];
+			fputc('\\', stdout);
+		default:
+			fputc(str[i], stdout);
 			break;
 		}
 	}
@@ -381,7 +298,6 @@ out_buf_push_esc_nws(const char *str, size_t len)
 		break;
 	}
 	/* perfect */
-	obuf[obix += clen] = '\0';
 	return 0;
 }
 
@@ -389,6 +305,7 @@ out_buf_push_esc_nws(const char *str, size_t len)
 /* our SAX parser */
 static bool pushp;
 static bool in_ent_p;
+static bool in_reg_p;
 static enum {
 	FL_UNK,
 	FL_CLEIS,
@@ -424,6 +341,7 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 @prefix fibo-be-le-lei: <http://www.omg.org/spec/EDMC-FIBO/BE/LegalEntities/LEIEntities/> .\n\
 @prefix rov: <http://www.w3.org/ns/regorg#> .\n\
 @prefix gas: <http://schema.ga-group.nl/symbology#> .\n\
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\
 \n";
 
 	case FL_UNK:
@@ -431,10 +349,22 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 			flavour = FL_CLEIS;
 		} else if (!strcmp(rname, "LEIRegistrations")) {
 			flavour = FL_PLEIS;
+		} else if (!strcmp((const char*)name, "lei:ContentDate")) {
+			r->date = sbix;
+			pushp = true;
+			break;
 		} else {
 			break;
 		}
 		out_buf_push(pre, strlenof(pre));
+
+		if (r->dlen) {
+			static const char tpre[] = "\
+@prefix TIME: <", post[] = "> .\n";
+			out_buf_push(tpre, strlenof(tpre));
+			out_buf_push(sbuf + r->date, r->dlen);
+			out_buf_push(post, strlenof(post));
+		}
 		break;
 
 	case FL_CLEIS:
@@ -458,8 +388,20 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 				r->stat = sbix;
 				pushp = true;
 			}
+		} else if (in_reg_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "InitialRegistrationDate")) {
+				r->irdate = sbix;
+				pushp = true;
+			} else if (!strcmp(rname, "LastUpdateDate")) {
+				r->ludate = sbix;
+				pushp = true;
+			}
 		} else if (!strcmp(rname, "Entity")) {
 			in_ent_p = true;
+		} else if (!strcmp(rname, "Registration")) {
+			in_reg_p = true;
 		} else if (!strcmp(rname, "LEI")) {
 			r->lei = sbix;
 			pushp = true;
@@ -507,6 +449,10 @@ sax_eo(void *ctx, const xmlChar *name)
 
 	switch (flavour) {
 	case FL_UNK:
+		if (!strcmp((const char*)name, "lei:ContentDate")) {
+			r->dlen = sbix - r->date;
+		}
+		pushp = false;
 		break;
 
 	case FL_CLEIS:
@@ -524,10 +470,18 @@ sax_eo(void *ctx, const xmlChar *name)
 			} else if (!strcmp(rname, "Entity")) {
 				in_ent_p = false;
 			}
-			pushp = false;
+		} else if (in_reg_p) {
+			if (0) {
+				;
+			} else if (!strcmp(rname, "InitialRegistrationDate")) {
+				r->irdlen = sbix - r->irdate;
+			} else if (!strcmp(rname, "LastUpdateDate")) {
+				r->ludlen = sbix - r->ludate;
+			} else if (!strcmp(rname, "Registration")) {
+				in_reg_p = false;
+			}
 		} else if (!strcmp(rname, "LEI")) {
 			r->llen = sbix - r->lei;
-			pushp = false;
 		} else if (!strcmp(rname, "LEIRecord")) {
 			if (r->llen) {
 				goto print;
@@ -536,21 +490,18 @@ sax_eo(void *ctx, const xmlChar *name)
 		} else if (!strcmp(rname, "LEIRecords")) {
 			goto final;
 		}
+		pushp = false;
 		break;
 
 	case FL_PLEIS:
 		if (!strcmp(rname, "LegalEntityIdentifier")) {
 			r->llen = sax_buf_massage(r->lei) - r->lei;
-			pushp = false;
 		} else if (!strcmp(rname, "RegisteredName")) {
 			r->nlen = sax_buf_massage(r->name) - r->name;
-			pushp = false;
 		} else if (!strcmp(rname, "EntityLegalForm")) {
 			r->flen = sax_buf_massage(r->form) - r->form;
-			pushp = false;
 		} else if (!strcmp(rname, "RegisteredCountryCode")) {
 			r->jlen = sax_buf_massage(r->jrsd) - r->jrsd;
-			pushp = false;
 		} else if (!strcmp(rname, "LEIRegistration")) {
 			if (r->llen) {
 				goto print;
@@ -559,12 +510,22 @@ sax_eo(void *ctx, const xmlChar *name)
 		} else if (!strcmp(rname, "LEIRegistrations")) {
 			goto final;
 		}
+		pushp = false;
 		break;
 
 	default:
 		break;
 
 	print:
+		/* provenance service */
+		if (r->ludlen) {
+			static const char pre[] = "\
+@prefix MODD: <", post[] = "> .\n";
+
+			out_buf_push(pre, strlenof(pre));
+			out_buf_push(sbuf + r->ludate, r->ludlen);
+			out_buf_push(post, strlenof(post));
+		}
 		/* principal type info */
 		out_buf_push("lei:", 4U);
 		out_buf_push(sbuf + r->lei, r->llen);
@@ -595,6 +556,22 @@ sax_eo(void *ctx, const xmlChar *name)
 				out_buf_push("\"\"\"@", 4U);
 				out_buf_push(r->lang, strlen(r->lang));
 			}
+		}
+		if (r->irdlen) {
+			static const char tag[] = "leiroc:InitialRegistrationDate";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"", 2U);
+			out_buf_push(sbuf + r->irdate, r->irdlen);
+			out_buf_push("\"^^xsd:dateTime ", 16U);
+		}
+		if (r->ludlen) {
+			static const char tag[] = "leiroc:LastUpdateDate";
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"", 2U);
+			out_buf_push(sbuf + r->ludate, r->ludlen);
+			out_buf_push("\"^^xsd:dateTime ", 16U);
 		}
 		if (r->flen && sbuf[r->form] != '<') {
 			/* append legal form */
@@ -655,9 +632,10 @@ sax_eo(void *ctx, const xmlChar *name)
 
 	final:
 		/* flush buffer */
-		out_buf_flsh(FORCE_FLUSH);
+		fflush(stdout);
 		flavour = FL_UNK;
 		in_ent_p = false;
+		in_reg_p = false;
 		pushp = false;
 		goto reset;
 	}
@@ -686,12 +664,6 @@ _parse(const char *file)
 		sbuf = NULL;
 		sbix = 0U;
 		sbsz = 0U;
-	}
-	if (LIKELY(obuf != NULL)) {
-		free(obuf);
-		obuf = NULL;
-		obix = 0U;
-		obsz = 0U;
 	}
 	return rc;
 }
