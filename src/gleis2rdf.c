@@ -74,6 +74,10 @@ struct lei_s {
 	size_t nlen;
 	off_t form;
 	size_t flen;
+	off_t fcod;
+	size_t clen;
+	off_t ofrm;
+	size_t olen;
 	off_t jrsd;
 	size_t jlen;
 	off_t stat;
@@ -381,6 +385,12 @@ sax_bo(void *ctx, const xmlChar *name, const xmlChar **atts)
 			} else if (!strcmp(rname, "LegalForm")) {
 				r->form = sbix;
 				pushp = true;
+			} else if (!strcmp(rname, "EntityLegalFormCode")) {
+				r->fcod = sbix;
+				pushp = true;
+			} else if (!strcmp(rname, "OtherLegalForm")) {
+				r->ofrm = sbix;
+				pushp = true;
 			} else if (!strcmp(rname, "LegalJurisdiction")) {
 				r->jrsd = sbix;
 				pushp = true;
@@ -463,6 +473,10 @@ sax_eo(void *ctx, const xmlChar *name)
 				r->nlen = sbix - r->name;
 			} else if (!strcmp(rname, "LegalForm")) {
 				r->flen = sbix - r->form;
+			} else if (!strcmp(rname, "OtherLegalForm")) {
+				r->olen = sbix - r->ofrm;
+			} else if (!strcmp(rname, "EntityLegalFormCode")) {
+				r->clen = sbix - r->fcod;
 			} else if (!strcmp(rname, "LegalJurisdiction")) {
 				r->jlen = sbix - r->jrsd;
 			} else if (!strcmp(rname, "EntityStatus")) {
@@ -573,7 +587,37 @@ sax_eo(void *ctx, const xmlChar *name)
 			out_buf_push(sbuf + r->ludate, r->ludlen);
 			out_buf_push("\"^^xsd:dateTime ", 16U);
 		}
-		if (r->flen && sbuf[r->form] != '<') {
+		if (r->clen && sbuf[r->fcod] != '<') {
+			/* append legal form */
+			static const char tag[] = "leiroc:EntityLegalFormCode";
+
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"", 2U);
+			out_buf_push_esc(sbuf + r->fcod, r->clen);
+			out_buf_push("\" ", 2U);
+		}
+		if (r->olen && sbuf[r->ofrm] != '<') {
+			/* append legal form */
+			static const char tag[] = "leiroc:LegalForm";
+			static const char typ[] = "rov:orgType";
+			static const char fpre[] = "http://openleis.com/legal_entities/search/legal_form/";
+
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(tag, strlenof(tag));
+			out_buf_push(" \"\"\"", 4U);
+			out_buf_push_esc(sbuf + r->ofrm, r->olen);
+			out_buf_push("\"\"\" ", 4U);
+
+			/* and as rov:orgType */
+			out_buf_push(";\n   ", 5U);
+			out_buf_push(typ, strlenof(typ));
+			out_buf_push(" <", 2U);
+			out_buf_push(fpre, strlenof(fpre));
+			out_buf_push_iri(sbuf + r->ofrm, r->olen);
+			out_buf_push("> ", 2U);
+		}
+		if (r->flen && !(r->olen || r->clen) && sbuf[r->form] != '<') {
 			/* append legal form */
 			static const char tag[] = "leiroc:LegalForm";
 			static const char typ[] = "rov:orgType";
